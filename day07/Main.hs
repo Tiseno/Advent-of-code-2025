@@ -1,6 +1,6 @@
-import           Control.Monad.State (State, evalState, get, put)
+import           Control.Monad.State (State, evalState)
+import qualified Control.Monad.State as State
 import qualified Data.List           as List
-import qualified Data.List.Split     as Split
 import           Data.Map            (Map)
 import qualified Data.Map            as Map
 
@@ -27,9 +27,6 @@ handleLine (count, over) under = (count + countSplits over under, propagate over
 part1 :: [String] -> Int
 part1 (start:input) = fst $ foldl handleLine (0, start) input
 
-getAt :: Pos -> [[a]] -> a
-getAt (y, x) matrix = matrix !! y !! x
-
 type Pos = (Int, Int)
 
 part2 :: [[Char]] -> Int
@@ -38,26 +35,20 @@ part2 (start:input) = evalState (countWorlds (0, startIndex)) Map.empty
     (Just startIndex) = List.elemIndex 'S' start
     endOfInput = length input - 1
     countWorlds :: Pos -> State (Map Pos Int) Int
-    countWorlds pos@(y, x) =
-      if y == endOfInput
-        then pure 1
-        else do
-          mem <- get
-          if pos `Map.member` mem
-            then pure $ mem Map.! pos
-            else case getAt pos input of
-              '.' -> do
-                count <- countWorlds (y+1, x)
-                mem <- get
-                put $ Map.insert pos count mem
-                pure count
-              '^' -> do
-                countLeft <- countWorlds (y+1, x-1)
-                countRight <- countWorlds (y+1, x+1)
-                let count = countLeft + countRight
-                mem <- get
-                put $ Map.insert pos count mem
-                pure count
+    countWorlds (y, _) | y == endOfInput = pure 1
+    countWorlds pos@(y, x) = do
+      memoized <- State.gets (Map.!? pos)
+      case memoized of
+        Just count -> pure count
+        Nothing -> do
+          count <- case input !! y !! x of
+            '.' -> countWorlds (y+1, x)
+            '^' -> do
+              countLeft  <- countWorlds (y+1, x-1)
+              countRight <- countWorlds (y+1, x+1)
+              pure $ countLeft + countRight
+          State.modify $ Map.insert pos count
+          pure count
 
 main :: IO ()
 main = do
